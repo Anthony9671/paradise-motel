@@ -716,6 +716,7 @@ async function staffLogin(){
       try{
         const { token } = await api('staffLogin', { password: STAFF_PASS });
         TOKEN = token;
+        try{ localStorage.setItem('pm-staff-token', token); }catch(e){}
       }catch(e){
         // Function is up but rejected us — its own password differs.
         // Fall back so the front desk isn't locked out.
@@ -747,6 +748,7 @@ function showModeBanner(){
 
 function signOut(){
   TOKEN=null; SESSION=null; GUEST=null;
+  try{ localStorage.removeItem('pm-staff-token'); }catch(e){}
   DB={ rooms:[], fix:[], pays:[], settings:{} };
   $('mgmt').classList.add('hide'); $('guest').classList.add('hide');
   $('gate').classList.remove('hide');
@@ -1262,8 +1264,28 @@ function flash(el,msg){
 
 /* ---------- boot ---------- */
 lload();
-probe();
-$('gRoom').focus();
+(async function boot(){
+  await probe();
+  // If we saved a staff token last time, try to stay signed in.
+  let saved = null;
+  try{ saved = localStorage.getItem('pm-staff-token'); }catch(e){}
+  if(saved && MODE === 'server'){
+    TOKEN = saved;
+    SESSION = { kind:'staff' };
+    try{
+      await refresh();           // fails with 401 if the token is stale
+      showModeBanner();
+      $('gate').classList.add('hide');
+      $('mgmt').classList.remove('hide');
+      return;
+    }catch(e){
+      // stale or invalid — fall back to the login screen
+      TOKEN = null; SESSION = null;
+      try{ localStorage.removeItem('pm-staff-token'); }catch(_){}
+    }
+  }
+  $('gRoom').focus();
+})();
 </script>
 </body>
 </html>
